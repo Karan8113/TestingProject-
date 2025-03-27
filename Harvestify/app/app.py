@@ -1,11 +1,13 @@
 # Importing essential libraries and modules
-
+import os
 from flask import Flask, render_template, request,redirect,url_for,flash,session,jsonify
 from bson import ObjectId
 from flask_pymongo import PyMongo
 from flask_login import LoginManager,UserMixin,login_user,logout_user,login_required,current_user
 from werkzeug.security import generate_password_hash,check_password_hash
+from werkzeug.utils import secure_filename
 from config import Config
+import tempfile
 
 from markupsafe import Markup
 import numpy as np
@@ -24,10 +26,14 @@ from utils.model import ResNet9
 from googletrans import Translator
 import re
 import asyncio
+import cv2
+from tensorflow.keras.models import load_model
+import tensorflow as tf
+# from tem.keras.models import load_model
 # ==============================================================================================
 
 # -------------------------LOADING THE TRAINED MODELS -----------------------------------------------
-
+app = Flask(__name__)
 # Loading plant disease classification model
 
 disease_classes = ['Apple___Apple_scab',
@@ -69,12 +75,12 @@ disease_classes = ['Apple___Apple_scab',
                    'Tomato___Tomato_mosaic_virus',
                    'Tomato___healthy']
 
-disease_model_path = 'models/plant_disease_model.pth'
-disease_model = ResNet9(3, len(disease_classes))
-disease_model.load_state_dict(torch.load(
-    disease_model_path, map_location=torch.device('cpu')))
-disease_model.eval()
 
+
+
+
+model_path = "models/trained_model.keras"
+model = load_model(model_path)
 
 # Loading crop recommendation model
 
@@ -109,36 +115,32 @@ def format_translated_text(text):
 
     
 
+# Set up the directory where you want to store the uploaded images temporarily
+UPLOAD_FOLDER = 'static/uploads/'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Define allowed extensions (e.g., jpg, png)
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+def predict_image_keras(img_path):
+    # Load and preprocess the image
+    img = tf.keras.preprocessing.image.load_img(img_path, target_size=(128, 128))  # Match input size of model
+    input_arr = tf.keras.preprocessing.image.img_to_array(img)
+    input_arr = np.expand_dims(input_arr, axis=0)  # Add batch dimension
 
+    # Predict with the model
+    prediction = model.predict(input_arr)
+    result_index = np.argmax(prediction)
+    model_prediction = disease_classes[result_index]
+    return model_prediction
 
-def predict_image(img, model=disease_model):
-    """
-    Transforms image to tensor and predicts disease label
-    :params: image
-    :return: prediction (string)
-    """
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.ToTensor(),
-    ])
-    image = Image.open(io.BytesIO(img))
-    img_t = transform(image)
-    img_u = torch.unsqueeze(img_t, 0)
-
-    # Get predictions from model
-    yb = model(img_u)
-    # Pick index with highest probability
-    _, preds = torch.max(yb, dim=1)
-    prediction = disease_classes[preds[0].item()]
-    # Retrieve the class label
-    return prediction
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ===============================================================================================
 # ------------------------------------ FLASK APP -------------------------------------------------
 
 
-app = Flask(__name__)
+
 app.config["weather_api_key"] = "9d7cde1f6d07ec55650544be1631307e"
 app.config["SECRET_KEY"] = "a3b5c6d7e8f9g0h1i2j3k4l5m6n7o8p9"
 app.config["MONGO_URI"] = "mongodb+srv://HarvestifyDB:HarvestifyDB@cluster0.rtxl9.mongodb.net/farmdb?retryWrites=true&w=majority&appName=Cluster0"
@@ -298,18 +300,9 @@ def fertilizer_recommendation():
 
     return render_template('fertilizer.html', title=title)
 
-# render disease prediction input page
-
-
-
-
 # ===============================================================================================
 
 # RENDER PREDICTION PAGES
-
-
-
-
 
 
 @ app.route('/crop-predict', methods=['POST'])
@@ -330,22 +323,6 @@ def crop_prediction():
         final_prediction = my_prediction[0]
 
         return render_template('crop-result.html', prediction=final_prediction, title=title)
-
-        # if get_weather() != None:
-        #     temperature, humidity = get_weather(city)
-        #     print(temperature)
-        #     print(humidity)
-        #     data = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
-        #     my_prediction = crop_recommendation_model.predict(data)
-        #     final_prediction = my_prediction[0]
-
-        #     return render_template('crop-result.html', prediction=final_prediction, title=title)
-
-        # else:
-
-        #     return render_template('try_again.html', title=title)
-
-# render fertilizer recommendation result page
 
 
 @ app.route('/fertilizer-predict', methods=['POST'])
@@ -430,41 +407,45 @@ async def disease_prediction():
         if 'file' not in request.files:
             return redirect(request.url)
         file = request.files.get('file')
-        if not file: 
-            return render_template('disease.html', title=title)
-        try:
-            img = file.read()
+        print(f"f fie is : {file}")
+        if not file or file.filename == '':
+            return redirect(request.url)
 
-            prediction = predict_image(img)
+        if file and allowed_file(file.filename):
+             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                filename = secure_filename(file.filename)
+                temp_file_path = os.path.join(tempfile.gettempdir(), filename)
+                file.save(temp_file_path)
 
+                # Now you can pass this path to your prediction function
+                prediction = predict_image_keras(temp_file_path)
 
+                # Convert prediction to a string for display
+                prediction = Markup(str(disease_dic[prediction]))
 
-            prediction = Markup(str(disease_dic[prediction]))
+                # Step 1: Remove HTML tags
 
-            print("prediction",prediction)
+                clean_text = re.sub(r'<[^>]*>', '', prediction)
 
-       
+                # print("clean_text",clean_text)
+                
+                # translated_text = translator.translate(clean_text, src='en', dest='es').text
+                translated_text =await translate_text(clean_text,lang)
 
+                # print("translated_text",translated_text)
 
-            # Step 1: Remove HTML tags
+                final_text=format_translated_text(translated_text)
+                # print("final text",final_text)
+                # translated_text = translate_text(prediction,'hi') 
 
-            clean_text = re.sub(r'<[^>]*>', '', prediction)
+                # Delete the temporary file after processing
+                os.remove(temp_file_path)
 
-            print("clean_text",clean_text)
+                # Render the template with prediction result
             
-            # translated_text = translator.translate(clean_text, src='en', dest='es').text
-            translated_text =await translate_text(clean_text,lang)
-
-            print("translated_text",translated_text)
-
-            final_text=format_translated_text(translated_text)
-            print("final text",final_text)
-            # translated_text = translate_text(prediction,'hi') 
-            return render_template('disease-result.html', prediction=final_text, title=title)
-        except:
-            pass
+                return render_template('disease-result.html', prediction=final_text, title=title)
+        
     return render_template('disease.html', title=title)
-
 
 # ===============================================================================================
 if __name__ == '__main__':
