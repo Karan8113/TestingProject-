@@ -1,0 +1,99 @@
+{% extends 'layout.html' %} {% block body %}
+
+
+<style>
+  html body {
+    background-color: rgb(206, 206, 228);
+  }
+</style>
+<br /><br />
+<h2 style="text-align: center; margin: 0px; color: black">
+  <b>Find out which disease has been caught by your plant</b>
+</h2>
+<br />
+<br>
+
+<div style="
+    width: 350px;
+    height: 50rem;
+    margin: 0px auto;
+    color: black;
+    border-radius: 25px;
+    padding: 10px 10px;
+    font-weight: bold;
+  ">
+
+
+
+
+  <form class="form-signin" method=post enctype=multipart/form-data>
+
+    <h2 class="h4 mb-3 font-weight-normal"><b>Please Upload The Image</b></h2>
+    <input type="file" name="file" class="form-control-file" id="inputfile" onchange="preview_image(event)"
+      style="font-weight: bold;">
+    <br>
+    <br>
+    <img id="output-image" class="rounded mx-auto d-block" />
+
+    <div class="form-group">
+      <label for="crop" style="font-size: 17px"><b>Select a Crop</b></label>
+      <select
+        name="cropname"
+        class="form-control"
+        id="crop"
+        style="font-weight: bold"
+        required
+      >
+        <option selected>Select Crop</option>
+        <option>Tomato</option>
+        <option>Grape</option>
+        <option>Orange</option>
+        <option>Soybean</option>
+        <option>Squash</option>
+        <option>Potato</option>
+        <option>Corn (maize)</option>
+        <option>Strawberry</option>
+        <option>Peach</option>
+        <option>Apple</option>
+        <option>Blueberry</option>
+        <option>Cherry (including sour)</option>
+        <option>Pepper, bell</option>
+        <option>Raspberry</option>
+      </select>
+    </div>
+    
+
+    <label for="language">Choose Language:</label>
+    <br>
+    <select id="language" name="language" style="font-weight: bold;font-size: 17px;" onchange="setLanguage()">
+      <option value="en">English</option>
+      <option value="hi">हिंदी (Hindi)</option>
+      <option value="mr">मराठी (Marathi)</option>
+    </select>
+    <br>
+    <!-- Hidden input to store language selection -->
+    <input type="hidden" id="selected_language" name="lang" value="en">
+    <button class="btn btn-lg btn-primary btn-block" type="submit" style="font-weight: bold;margin-top: 20px;">Predict</button>
+
+
+  </form>
+</div>
+
+<script type="text/javascript">
+  function preview_image(event) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var output = document.getElementById('output-image')
+      output.src = reader.result;
+    }
+    reader.readAsDataURL(event.target.files[0]);
+  }
+
+  function setLanguage() {
+    var language = document.getElementById('language').value;
+    document.getElementById('selected_language').value = language;
+  }
+</script>
+
+</div>
+{% endblock %}
