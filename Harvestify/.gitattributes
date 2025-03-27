@@ -1,2 +1,0 @@
-Harvestify/app/models/trained_model.keras filter=lfs diff=lfs merge=lfs -text
-app/models/trained_model.keras filter=lfs diff=lfs merge=lfs -text
